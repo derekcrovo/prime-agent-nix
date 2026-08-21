@@ -154,6 +154,6 @@ buildNpmPackage' {
     changelog = "https://github.com/PrimeIntellect-ai/prime-agent/blob/v${version}/packages/coding-agent/CHANGELOG.md";
     license = lib.licenses.mit;
     mainProgram = "prime-agent";
-    platforms = lib.platforms.linux;
+    platforms = lib.platforms.linux ++ [ "aarch64-darwin" ];
   };
 }
