@@ -1,7 +1,8 @@
 # prime-agent-nix
 
 This repository provides a frequently updated Nix package for
-[Prime Agent](https://github.com/PrimeIntellect-ai/prime-agent).
+[Prime Agent](https://github.com/PrimeIntellect-ai/prime-agent). It supports
+`x86_64-linux`, `aarch64-linux`, and Apple Silicon (`aarch64-darwin`).
 
 The scheduled workflow checks upstream every ten minutes. When a stable release
 changes, it refreshes the fixed source and dependency hashes. It then builds and
