@@ -27,6 +27,18 @@
 }:
 let
   nodejs = nodejs_22;
+  # tyro 1.0.15's test_suppress_subcommand asserts the suppressed field name
+  # "bc" is absent from --help output, but the Nix build runs pytest from a
+  # store path that happens to contain the substring "bc", which tyro prints
+  # in the usage line (prog = sys.argv[0]). Hash-lottery false positive;
+  # disable that test.
+  python313' = python313.override {
+    packageOverrides = _final: prev: {
+      tyro = prev.tyro.overridePythonAttrs (old: {
+        disabledTests = (old.disabledTests or [ ]) ++ [ "test_suppress_subcommand" ];
+      });
+    };
+  };
   buildNpmPackage' = buildNpmPackage.override { inherit nodejs; };
   runtimeBins = lib.makeBinPath [
     nodejs
@@ -36,7 +48,7 @@ let
     fd
     uv
   ];
-  kernelPythonEnv = python313.withPackages (
+  kernelPythonEnv = python313'.withPackages (
     ps: with ps; [
       beautifulsoup4
       dill
