@@ -77,6 +77,15 @@ let
         for sourceDir in ${src}/packages/coding-agent/skills/*/src; do
           cp -r "$sourceDir"/. "$out/lib/"
         done
+        # Fix: MCP SDK (>= 1.x) expects a timedelta for
+        # ClientSession(read_timeout_seconds=...) and calls .total_seconds() on
+        # it, but the kernel passes a raw float, causing
+        #   AttributeError: 'float' object has no attribute 'total_seconds'
+        # on every stdio MCP server startup.  Fixed upstream in prime-agent
+        # main but not yet released; remove this once 0.9.0+ ships.
+        substituteInPlace "$out/lib/rlm/mcp.py" \
+          --replace-fail "ClientSession(read, write, read_timeout_seconds=self.call_timeout)" \
+                          "ClientSession(read, write, read_timeout_seconds=__import__('datetime').timedelta(seconds=self.call_timeout))"
         makeWrapper ${kernelPythonEnv}/bin/python "$out/bin/python" \
           --prefix PYTHONPATH : "$out/lib" \
           --set PYTHONDONTWRITEBYTECODE 1
