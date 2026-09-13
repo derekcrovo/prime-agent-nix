@@ -1,23 +1,18 @@
 # prime-agent-nix
 
-This repository provides a frequently updated Nix package for
-[Prime Agent](https://github.com/PrimeIntellect-ai/prime-agent). It supports
-`x86_64-linux`, `aarch64-linux`, and Apple Silicon (`aarch64-darwin`).
+A Nix package for [Prime Agent](https://github.com/PrimeIntellect-ai/prime-agent),
+maintained as a personal fork. It supports `x86_64-linux`, `aarch64-linux`,
+and Apple Silicon (`aarch64-darwin`).
 
-The scheduled workflow checks upstream every ten minutes. When a stable release
-changes, it refreshes the fixed source and dependency hashes. It then builds and
-smoke-tests the package before it updates `main`. GitHub can delay scheduled
-workflow starts during periods of high load.
+Versions are updated manually: check for a new upstream release, refresh the
+pinned version and hashes, build, and commit. There is no scheduled automation.
 
 ## Run
 
 ```console
-nix --tarball-ttl 0 run github:johnrichardrinehart/prime-agent-nix -- --version
-nix --tarball-ttl 0 run github:johnrichardrinehart/prime-agent-nix
+nix run github:derekcrovo/prime-agent-nix -- --version
+nix run github:derekcrovo/prime-agent-nix
 ```
-
-`--tarball-ttl 0` makes Nix resolve the current repository revision instead of
-using a cached GitHub archive lookup.
 
 The package supplies a Nix-built IPython kernel and all default Python modules.
 It does not download a generic Linux Python during first use. This behavior
@@ -29,43 +24,48 @@ Use the package directly from a flake input:
 
 ```nix
 {
-  inputs.prime-agent-nix.url =
-    "github:johnrichardrinehart/prime-agent-nix";
+  inputs.prime-agent.url = "github:derekcrovo/prime-agent-nix";
+  inputs.prime-agent.inputs.nixpkgs.follows = "nixpkgs-unstable";
 
-  outputs = { nixpkgs, prime-agent-nix, ... }: {
-    nixosConfigurations.example = nixpkgs.lib.nixosSystem {
-      system = "x86_64-linux";
-      modules = [
-        {
-          environment.systemPackages = [
-            prime-agent-nix.packages.x86_64-linux.default
-          ];
-        }
-      ];
-    };
-  };
+  # ...
+  home.packages = [ prime-agent.packages.aarch64-darwin.default ];
 }
 ```
 
 The flake also exports `overlays.default` as `pkgs.prime-agent`.
 
-## Update and verify
+## Update to a new release
 
-```console
-nix run .#update
-nix flake check --print-build-logs
-```
+1. Check for a newer stable tag (or wait for the TUI banner / the hourly
+   `scripts/update-check.sh` notification):
 
-Use `nix run .#update -- --check` to compare the packaged version with the
-latest stable upstream tag. Use `--force` to regenerate hashes for the current
-tag.
+   ```console
+   nix run .#update -- --check
+   ```
+
+2. Refresh the pinned source and npm dependency hashes in `VERSION.json`:
+
+   ```console
+   nix run .#update
+   ```
+
+3. Build and verify, then commit:
+
+   ```console
+   nix flake check --print-build-logs
+   git commit -am "prime-agent: update to v$NEW_VERSION"
+   ```
+
+If the build breaks, upstream changed something the packaging relied on; see
+`nix/packages/prime-agent.nix` for the patches and substitutions that usually
+need adjusting.
+
+Use `nix run .#update -- --force` to regenerate hashes for the current tag.
 
 ## Trust model
 
 Each revision pins Prime Agent source and npm dependencies with Nix hashes.
-Scheduled updates build before publication, but they merge without human
-review. Track an exact commit when review and reproducibility matter more than
-release speed.
+Updates are built and checked before commit, by hand.
 
 This repository packages Prime Agent but does not maintain it. Prime Agent is
 MIT licensed by Prime Intellect and its contributors. See
@@ -73,16 +73,12 @@ MIT licensed by Prime Intellect and its contributors. See
 
 ## Development
 
-This repository uses
-[`nix-project-template`](https://github.com/johnrichardrinehart/nix-project-template)
-because it is a Nix-native consumer flake. The template keeps development-only
-formatting and hook inputs out of package consumers.
-
 ```console
 nix fmt
 nix flake check --print-build-logs
-nix develop
 ```
+
+Direnv loads the dev shell automatically (`.envrc`).
 
 ## License
 

@@ -37,7 +37,7 @@ mkdir -p "$state_dir"
 stamp="$state_dir/notified-$latest_rev"
 today="$(date +%F)"
 if [ ! -f "$stamp" ] || [ "$(cat "$stamp")" != "$today" ]; then
-  osascript -e "display notification \"Prime Agent $latest_rev is available (packaged: $current_rev). Run scripts/update-to-main.sh in ~/prime-agent-nix.\" with title \"prime-agent-nix\" sound name \"Glass\"" ||
+  osascript -e "display notification \"Prime Agent $latest_rev is available (packaged: $current_rev). Run nix run .#update in ~/prime-agent-nix.\" with title \"prime-agent-nix\" sound name \"Glass\"" ||
     echo "(notification failed)" >&2
   echo "$today" >"$stamp"
 fi

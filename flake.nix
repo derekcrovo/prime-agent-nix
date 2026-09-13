@@ -1,44 +1,27 @@
 {
-  description = "Frequently updated Nix package for Prime Intellect Prime Agent";
+  description = "Nix package for Prime Intellect Prime Agent";
 
-  inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-
-    flake-parts = {
-      url = "github:hercules-ci/flake-parts";
-      inputs.nixpkgs-lib.follows = "nixpkgs";
-    };
-  };
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
   outputs =
-    inputs@{
+    {
       self,
-      flake-parts,
+      nixpkgs,
       ...
     }:
-    flake-parts.lib.mkFlake { inherit inputs; } {
+    let
       systems = [
         "x86_64-linux"
         "aarch64-linux"
         "aarch64-darwin"
       ];
-
-      imports = [ inputs.flake-parts.flakeModules.partitions ];
-
-      partitionedAttrs = {
-        checks = "dev";
-        devShells = "dev";
-        formatter = "dev";
-      };
-
-      partitions.dev = {
-        extraInputsFlake = ./dev;
-        module = import ./nix/flake/dev-partition.nix;
-      };
-
-      perSystem =
-        { pkgs, ... }:
+      forAllSystems = nixpkgs.lib.genAttrs systems;
+    in
+    {
+      packages = forAllSystems (
+        system:
         let
+          pkgs = nixpkgs.legacyPackages.${system};
           release = builtins.fromJSON (builtins.readFile ./VERSION.json);
           version = pkgs.lib.removePrefix "v" release.rev;
           src = pkgs.fetchFromGitHub {
@@ -50,42 +33,82 @@
             inherit src version;
             inherit (release) npmDepsHash;
           };
+        in
+        {
+          default = primeAgent;
+          prime-agent = primeAgent;
+        }
+      );
+
+      apps = forAllSystems (
+        system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
           update = import ./nix/apps/update.nix { inherit pkgs; };
         in
         {
-          packages = {
-            default = primeAgent;
-            prime-agent = primeAgent;
+          default = {
+            type = "app";
+            program = pkgs.lib.getExe self.packages.${system}.prime-agent;
+            meta.description = "Run Prime Agent";
           };
-
-          apps = {
-            default = {
-              type = "app";
-              program = pkgs.lib.getExe primeAgent;
-              meta.description = "Run Prime Agent";
-            };
-            update = {
-              type = "app";
-              program = pkgs.lib.getExe update;
-              meta.description = "Refresh the packaged Prime Agent release";
-            };
+          update = {
+            type = "app";
+            program = pkgs.lib.getExe update;
+            meta.description = "Refresh the packaged Prime Agent release";
           };
+        }
+      );
 
-          checks = {
-            package = primeAgent;
-            kernel = import ./nix/checks/kernel.nix { inherit pkgs primeAgent version; };
-            version =
-              pkgs.runCommand "prime-agent-version-${version}" { nativeBuildInputs = [ primeAgent ]; }
-                ''
-                  export HOME="$TMPDIR/home"
-                  mkdir -p "$HOME"
-                  test "$(prime-agent --version 2>&1)" = ${pkgs.lib.escapeShellArg version}
-                  touch "$out"
-                '';
-          };
-        };
+      checks = forAllSystems (
+        system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+          primeAgent = self.packages.${system}.prime-agent;
+          version = primeAgent.version;
+        in
+        {
+          package = primeAgent;
+          kernel = import ./nix/checks/kernel.nix { inherit pkgs primeAgent version; };
+          version =
+            pkgs.runCommand "prime-agent-version-${version}" { nativeBuildInputs = [ primeAgent ]; }
+              ''
+                export HOME="$TMPDIR/home"
+                mkdir -p "$HOME"
+                test "$(prime-agent --version 2>&1)" = ${pkgs.lib.escapeShellArg version}
+                touch "$out"
+              '';
+        }
+      );
 
-      flake.overlays.default = final: _prev: {
+      formatter = forAllSystems (
+        system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+        in
+        pkgs.writeShellApplication {
+          name = "fmt";
+          runtimeInputs = [ pkgs.nixfmt-tree ];
+          text = ''
+            if [ $# -eq 0 ]; then
+              set -- .
+            fi
+            exec treefmt "$@"
+          '';
+        }
+      );
+
+      devShells = forAllSystems (
+        system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+        in
+        {
+          default = pkgs.mkShell { packages = [ pkgs.nixfmt-tree ]; };
+        }
+      );
+
+      overlays.default = final: _prev: {
         prime-agent = self.packages.${final.stdenv.hostPlatform.system}.prime-agent;
       };
     };
