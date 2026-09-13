@@ -122,9 +122,6 @@ buildNpmPackage' {
   '';
 
   preBuild = ''
-    substituteInPlace packages/ai/package.json \
-      --replace-fail "npm run generate-models && " ""
-
     find packages -name package.json -exec sed -i \
       -e 's/--watch --preserveWatchOutput//g' \
       {} \;
