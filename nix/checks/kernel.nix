@@ -43,7 +43,7 @@ pkgs.runCommand "prime-agent-kernel-${version}" { } ''
       client = manager.client()
       client.start_channels()
       client.wait_for_ready(timeout=20)
-      message_id = client.execute("import rlm; assert callable(rlm.run)")
+      message_id = client.execute("import rlm; assert callable(rlm.spawn)")
       while True:
           reply = client.get_shell_msg(timeout=20)
           if reply.get("parent_header", {}).get("msg_id") == message_id:
