@@ -15,9 +15,11 @@ cd "$(dirname "$0")"
 
 args=()
 commit=1
+force=0
 for arg in "$@"; do
   case "$arg" in
-    --check|--force) args+=("$arg") ;;
+    --check) args+=("$arg") ;;
+    --force) args+=("$arg"); force=1 ;;
     --no-commit) commit=0 ;;
     *)
       echo "Usage: $0 [--check|--force|--no-commit]" >&2
@@ -26,10 +28,18 @@ for arg in "$@"; do
   esac
 done
 
+before_update="$(git hash-object VERSION.json package-lock.json)"
+
 # 1. Update VERSION.json pins (no-op when current, unless --force).
 nix run .#update -- "${args[@]+${args[@]}}"
 
 if [ "${1-}" = "--check" ]; then
+  exit 0
+fi
+
+after_update="$(git hash-object VERSION.json package-lock.json)"
+if [ "$force" -eq 0 ] && [ "$before_update" = "$after_update" ]; then
+  echo "No Prime Agent update; skipping build and verification."
   exit 0
 fi
 
