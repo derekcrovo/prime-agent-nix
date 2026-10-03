@@ -51,7 +51,8 @@ if [ "$commit" -eq 1 ] && ! git diff --quiet; then
   rev="$(jq -r .rev VERSION.json)"
   git add VERSION.json package-lock.json
   git commit -m "prime-agent: update to $rev"
-  echo "Committed update to $rev."
+  git push
+  echo "Committed update to $rev and pushed."
 else
   echo "Nothing to commit."
 fi
