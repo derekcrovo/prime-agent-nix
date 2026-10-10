@@ -9,9 +9,7 @@ pkgs.writeShellApplication {
     gnused
     jq
     nix
-    nodejs
-    npm-lockfile-fix
+    python3
   ];
-  runtimeEnv.PRIME_AGENT_NIXPKGS = pkgs.path;
   text = builtins.readFile ../../scripts/update.sh;
 }

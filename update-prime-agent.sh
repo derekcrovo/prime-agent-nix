@@ -28,7 +28,7 @@ for arg in "$@"; do
   esac
 done
 
-before_update="$(git hash-object VERSION.json package-lock.json)"
+before_update="$(git hash-object VERSION.json)"
 
 # 1. Update VERSION.json pins (no-op when current, unless --force).
 nix run .#update -- "${args[@]+${args[@]}}"
@@ -37,7 +37,7 @@ if [ "${1-}" = "--check" ]; then
   exit 0
 fi
 
-after_update="$(git hash-object VERSION.json package-lock.json)"
+after_update="$(git hash-object VERSION.json)"
 if [ "$force" -eq 0 ] && [ "$before_update" = "$after_update" ]; then
   echo "No Prime Agent update; skipping build and verification."
   exit 0
@@ -49,7 +49,10 @@ nix flake check --print-build-logs
 # 3. Commit the release bump.
 if [ "$commit" -eq 1 ] && ! git diff --quiet; then
   rev="$(jq -r .rev VERSION.json)"
-  git add VERSION.json package-lock.json
+  git add VERSION.json
+  if git ls-files --error-unmatch package-lock.json >/dev/null 2>&1; then
+    git add -u -- package-lock.json
+  fi
   git commit -m "prime-agent: update to $rev"
   git push
   echo "Committed update to $rev and pushed."

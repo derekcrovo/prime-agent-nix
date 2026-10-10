@@ -1,12 +1,33 @@
 {
   description = "Nix package for Prime Intellect Prime Agent";
 
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+
+    pyproject-nix = {
+      url = "github:pyproject-nix/pyproject.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    uv2nix = {
+      url = "github:pyproject-nix/uv2nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.pyproject-nix.follows = "pyproject-nix";
+    };
+    pyproject-build-systems = {
+      url = "github:pyproject-nix/build-system-pkgs";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.pyproject-nix.follows = "pyproject-nix";
+      inputs.uv2nix.follows = "uv2nix";
+    };
+  };
 
   outputs =
     {
       self,
       nixpkgs,
+      pyproject-nix,
+      uv2nix,
+      pyproject-build-systems,
       ...
     }:
     let
@@ -29,9 +50,27 @@
             repo = "prime-agent";
             inherit (release) rev hash;
           };
+          catalogSrc = pkgs.fetchFromGitHub {
+            owner = "PrimeIntellect-ai";
+            repo = "prime-agent-catalog";
+            rev = release.catalogRev;
+            hash = release.catalogHash;
+          };
+          kernelPython = import ./nix/packages/kernel-python.nix {
+            inherit
+              pkgs
+              pyproject-nix
+              uv2nix
+              pyproject-build-systems
+              ;
+          };
           primeAgent = pkgs.callPackage ./nix/packages/prime-agent.nix {
-            inherit src version;
-            inherit (release) npmDepsHash;
+            inherit
+              src
+              version
+              catalogSrc
+              kernelPython
+              ;
           };
         in
         {

@@ -50,43 +50,37 @@ source_json="$(
 source_hash="$(jq -r .hash <<<"$source_json")"
 source_path="$(jq -r .storePath <<<"$source_json")"
 
-cp -R "$source_path"/. "$tmpdir/source"
-chmod -R u+w "$tmpdir/source"
-npm-lockfile-fix "$tmpdir/source/package-lock.json"
+catalog_rev="$(
+  git ls-remote https://github.com/PrimeIntellect-ai/prime-agent-catalog.git refs/heads/main |
+    awk 'NR == 1 { print $1 }'
+)"
+test -n "$catalog_rev"
+catalog_json="$(
+  nix store prefetch-file --json --unpack \
+    "https://github.com/PrimeIntellect-ai/prime-agent-catalog/archive/$catalog_rev.tar.gz"
+)"
+catalog_hash="$(jq -r .hash <<<"$catalog_json")"
+catalog_path="$(jq -r .storePath <<<"$catalog_json")"
 
-cat >"$tmpdir/npm-deps.nix" <<NIX
-let
-  pkgs = import $PRIME_AGENT_NIXPKGS { };
-in
-pkgs.fetchNpmDeps {
-  src = $tmpdir/source;
-  hash = pkgs.lib.fakeHash;
-  fetcherVersion = 2;
-}
-NIX
-
-set +e
-npm_deps_log="$(nix-build "$tmpdir/npm-deps.nix" --no-out-link 2>&1)"
-npm_deps_status=$?
-set -e
-if [ "$npm_deps_status" -eq 0 ]; then
-  echo "The fake npm dependency hash unexpectedly succeeded." >&2
+if [ ! -f "$source_path/Cargo.toml" ] || \
+   [ ! -f "$source_path/Cargo.lock" ] || \
+   [ ! -f "$source_path/crates/pa-cli/Cargo.toml" ]; then
+  echo "Prime Agent $latest_rev is not a supported Rust workspace (expected Cargo.toml, Cargo.lock, and crates/pa-cli)." >&2
   exit 1
 fi
-
-npm_deps_hash="$(sed -n 's/^[[:space:]]*got:[[:space:]]*//p' <<<"$npm_deps_log" | tail -n1)"
-if [[ ! $npm_deps_hash =~ ^sha256- ]]; then
-  printf '%s\n' "$npm_deps_log" >&2
-  echo "Could not determine the npm dependency hash." >&2
+if grep -Fq 'source = "git+' "$source_path/Cargo.lock"; then
+  echo "Prime Agent $latest_rev added Git-sourced Cargo dependencies; add their hashes to nix/packages/prime-agent.nix before updating." >&2
   exit 1
 fi
+python3 "$source_path/scripts/release/bundle_catalog.py" generate \
+  --catalog-dir "$catalog_path" --out "$tmpdir/catalog-assets" >/dev/null
 
-cp "$tmpdir/source/package-lock.json" package-lock.json
 jq \
   --arg rev "$latest_rev" \
   --arg hash "$source_hash" \
-  --arg npmDepsHash "$npm_deps_hash" \
-  '.rev = $rev | .hash = $hash | .npmDepsHash = $npmDepsHash' \
+  --arg catalogRev "$catalog_rev" \
+  --arg catalogHash "$catalog_hash" \
+  'del(.npmDepsHash) | del(.cargoHash) | .rev = $rev | .hash = $hash | .catalogRev = $catalogRev | .catalogHash = $catalogHash' \
   VERSION.json >"$tmpdir/VERSION.json"
 mv "$tmpdir/VERSION.json" VERSION.json
 

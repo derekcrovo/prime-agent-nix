@@ -1,5 +1,6 @@
 {
-  "rev": "v0.9.8",
-  "hash": "sha256-Xyqlc7Em7Bq+8oKkPUGVkzfXbiwgjPGHmjhsbcoeHis=",
-  "npmDepsHash": "sha256-fm4HH2jH4jsgwMEeXxPG20Bz3yiI7ThJrg9HWdEgW9M="
+  "rev": "v0.10.0",
+  "hash": "sha256-S7QrG4Abk7/xa5ykRqHQRgSi8MRL29u19V5lutROPdQ=",
+  "catalogRev": "d4a099cf2aae7ea8c231298e93fd535756ef43c9",
+  "catalogHash": "sha256-dRDI9/Og95wM9MCYPcgoCP20P2kSKUnTwfMgxoPT5fg="
 }

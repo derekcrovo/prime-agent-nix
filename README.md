@@ -14,9 +14,10 @@ nix run github:derekcrovo/prime-agent-nix -- --version
 nix run github:derekcrovo/prime-agent-nix
 ```
 
-The package supplies a Nix-built IPython kernel and all default Python modules.
-It does not download a generic Linux Python during first use. This behavior
-keeps the kernel compatible with NixOS and supports offline kernel startup.
+The Rust CLI ships with its Python RLM runtime, built-in skills, and a Nix-built
+Python 3.11 environment. The environment is locked in `nix/kernel/uv.lock` and
+includes MCP 2 plus the default Python modules. It does not download a Python
+runtime on first use, so kernel startup works offline.
 
 ## Install declaratively
 
@@ -43,7 +44,8 @@ The flake also exports `overlays.default` as `pkgs.prime-agent`.
    nix run .#update -- --check
    ```
 
-2. Refresh the pinned source and npm dependency hashes in `VERSION.json`:
+2. Refresh the pinned Rust source and validated catalog snapshot in
+   `VERSION.json`. Cargo dependencies come from the upstream `Cargo.lock`:
 
    ```console
    nix run .#update
@@ -56,16 +58,19 @@ The flake also exports `overlays.default` as `pkgs.prime-agent`.
    git commit -am "prime-agent: update to v$NEW_VERSION"
    ```
 
-If the build breaks, upstream changed something the packaging relied on; see
-`nix/packages/prime-agent.nix` for the patches and substitutions that usually
-need adjusting.
+The `./update-prime-agent.sh` wrapper runs the update and checks, then commits
+and pushes by default. Use `./update-prime-agent.sh --no-commit` to review the
+changes without committing. If a build breaks, inspect `nix/packages/prime-agent.nix`
+and `nix/kernel/pyproject.toml` for packaging assumptions that need updating.
 
 Use `nix run .#update -- --force` to regenerate hashes for the current tag.
 
 ## Trust model
 
-Each revision pins Prime Agent source and npm dependencies with Nix hashes.
-Updates are built and checked before commit, by hand.
+Each revision pins the Prime Agent source and bundled catalog snapshot by
+content hash. Rust dependencies use the checksums in upstream `Cargo.lock`, and
+the Nix-built Python kernel dependencies are pinned in `nix/kernel/uv.lock`.
+Updates are built and checked before commit.
 
 This repository packages Prime Agent but does not maintain it. Prime Agent is
 MIT licensed by Prime Intellect and its contributors. See
@@ -78,7 +83,10 @@ nix fmt
 nix flake check --print-build-logs
 ```
 
-Direnv loads the dev shell automatically (`.envrc`).
+Direnv loads the dev shell automatically (`.envrc`). On Darwin, Nix skips two
+upstream CLI tests with socket or short-timer assumptions; it runs the rest
+with `NO_COLOR=1`. Linux package builds run the full CLI library suite.
+`checks.kernel` validates the packaged CLI and Python runtime on Darwin.
 
 ## License
 
