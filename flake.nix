@@ -45,11 +45,9 @@
           pkgs = nixpkgs.legacyPackages.${system};
           release = builtins.fromJSON (builtins.readFile ./VERSION.json);
           version = pkgs.lib.removePrefix "v" release.rev;
-          src = pkgs.fetchFromGitHub {
-            owner = "PrimeIntellect-ai";
-            repo = "prime-agent";
-            inherit (release) rev hash;
-          };
+          # src is this repo itself: upstream source is merged into main, so
+          # fixes land here directly instead of via a pinned upstream rev.
+          src = self;
           catalogSrc = pkgs.fetchFromGitHub {
             owner = "PrimeIntellect-ai";
             repo = "prime-agent-catalog";
