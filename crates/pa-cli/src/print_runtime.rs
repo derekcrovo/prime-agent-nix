@@ -478,10 +478,18 @@ async fn build_headless_engine_with(
     let mut registry =
         pa_core::models::ModelRegistry::create(auth, config.agent_dir.join("models.json"));
     registry.load_private_authorization_from_cache();
+    // Headless selection mirrors the interactive/daemon order: explicit CLI
+    // flags first, then the settings.json defaults, then the catalog's
+    // preferred default. Without the settings step, a bare `prime-agent -p`
+    // ignores `defaultProvider`/`defaultModel` and lands on the first
+    // authenticated provider in the catalog (upstream issue #3509).
+    let settings = pa_core::settings::SettingsManager::create(&config.cwd, &config.agent_dir);
     let model = select_model(
         &mut registry,
         config.provider.as_deref(),
         config.model.as_deref(),
+        settings.get_default_provider(),
+        settings.get_default_model(),
     )?;
 
     // Resolve request auth once: the stored team / `PRIME_TEAM_ID` reach the wire through these
@@ -853,10 +861,37 @@ fn select_model(
     registry: &mut pa_core::models::ModelRegistry,
     provider: Option<&str>,
     model: Option<&str>,
+    default_provider: Option<&str>,
+    default_model_id: Option<&str>,
 ) -> Result<Model, String> {
     let available: Vec<Model> = registry.get_available().into_iter().cloned().collect();
     let Some(model_name) = model else {
         let all: Vec<Model> = registry.get_all().to_vec();
+        if let (Some(provider), Some(pattern)) = (default_provider, default_model_id) {
+            if let Some(found) = available
+                .iter()
+                .find(|candidate| {
+                    candidate.provider.eq_ignore_ascii_case(provider)
+                        && (candidate.id == pattern
+                            || pattern
+                                .strip_prefix(&format!("{}:", provider))
+                                .is_some_and(|rest| rest == candidate.id))
+                })
+            {
+                return Ok(found.clone());
+            }
+            // Settings store the qualified pattern (e.g. "openrouter/deepseek/deepseek-v4.1-flash");
+            // resolve it through the same path the CLI flag uses, without
+            // hard-failing when the catalog snapshot no longer lists it.
+            let resolved = pa_core::models::resolve_cli_model(
+                Some(provider),
+                pattern,
+                &available,
+            );
+            if let Some(found) = resolved.model {
+                return Ok(found);
+            }
+        }
         if let Some(default) = pa_core::models::find_preferred_default_model(&available) {
             return Ok(default.clone());
         }
