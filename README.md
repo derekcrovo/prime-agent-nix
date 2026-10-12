@@ -1,93 +1,137 @@
-# prime-agent-nix
+<p align="center">
+  <a href="https://primeintellect.ai">
+    <picture>
+      <source media="(prefers-color-scheme: light)" srcset="https://github.com/user-attachments/assets/40c36e38-c5bd-4c5a-9cb3-f7b902cd155d">
+      <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/6414bc9b-126b-41ca-9307-9e982430cde8">
+      <img alt="Prime Intellect" src="https://github.com/user-attachments/assets/6414bc9b-126b-41ca-9307-9e982430cde8" width="312" style="max-width: 100%;">
+    </picture>
+  </a>
+</p>
 
-A Nix package for [Prime Agent](https://github.com/PrimeIntellect-ai/prime-agent),
-maintained as a personal fork. It supports `x86_64-linux`, `aarch64-linux`,
-and Apple Silicon (`aarch64-darwin`).
+<h3 align="center">
+Prime Agent: A Self-Improving RLM Harness
+</h3>
 
-Versions are updated manually: check for a new upstream release, refresh the
-pinned version and hashes, build, and commit. There is no scheduled automation.
+<p align="center">
+  <a href="#install">Documentation</a> &bull;
+  <a href="https://github.com/PrimeIntellect-ai/verifiers">Verifiers</a> &bull;
+  <a href="https://github.com/PrimeIntellect-ai/prime-rl">PRIME-RL</a>
+</p>
 
-## Run
+<p align="center">
+  <a href="https://github.com/PrimeIntellect-ai/prime-agent/actions/workflows/ci.yml">
+    <img src="https://github.com/PrimeIntellect-ai/prime-agent/actions/workflows/ci.yml/badge.svg" alt="CI" />
+  </a>
+  <a href="https://arxiv.org/abs/2608.23552">
+    <img src="https://img.shields.io/badge/arXiv-2608.23552-b31b1b.svg" alt="arXiv" />
+  </a>
+</p>
 
-```console
-nix run github:derekcrovo/prime-agent-nix -- --version
-nix run github:derekcrovo/prime-agent-nix
+<p align="center">
+  <a href="https://trendshift.io/repositories/104249?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-104249" target="_blank" rel="noopener noreferrer">
+    <img src="https://trendshift.io/api/badge/repositories/104249" alt="PrimeIntellect-ai%2Fprime-agent | Trendshift" width="250" height="55" />
+  </a>
+</p>
+
+Prime Agent is an open-source coding and research agent for general and long-running work. It is designed around two core abstractions:
+
+- The **[Recursive Language Model (RLM)](https://www.primeintellect.ai/blog/rlm)** treats context as variables (*prompt-as-a-variable*) and tools like recursive subagents as function calls (*programmatic tool /sub-agent calling*) inside a persistent REPL.
+- The **[Continual Harness](https://arxiv.org/abs/2605.09998)** stores supplemental prompts, memories, skill descriptions, and reusable subagent specifications as durable state that Prime Agent can refine through small, evidence-backed updates, local to the session by default.
+
+## Install
+
+Install the latest stable version with the one-command installer:
+
+```bash
+curl -fsSL https://app.primeintellect.ai/prime-agent/install.sh | sh
 ```
 
-The Rust CLI ships with its Python RLM runtime, built-in skills, and a Nix-built
-Python 3.11 environment. The environment is locked in `nix/kernel/uv.lock` and
-includes MCP 2 plus the default Python modules. It does not download a Python
-runtime on first use, so kernel startup works offline.
+On Windows, install from PowerShell:
 
-## Install declaratively
-
-Use the package directly from a flake input:
-
-```nix
-{
-  inputs.prime-agent.url = "github:derekcrovo/prime-agent-nix";
-  inputs.prime-agent.inputs.nixpkgs.follows = "nixpkgs-unstable";
-
-  # ...
-  home.packages = [ prime-agent.packages.aarch64-darwin.default ];
-}
+```powershell
+irm https://app.primeintellect.ai/prime-agent/install.ps1 | iex
 ```
 
-The flake also exports `overlays.default` as `pkgs.prime-agent`.
+The Windows installer downloads the latest stable Windows x64 build and verifies its checksum before installation.
 
-## Update to a new release
+## Why Prime Agent
 
-1. Check for a newer stable tag (or wait for the TUI banner / the hourly
-   `scripts/update-check.sh` notification):
+Prime Agent combines a persistent Python control environment with durable harness state, so useful working context and reusable operating patterns can outlive a single chat window.
 
-   ```console
-   nix run .#update -- --check
-   ```
+- **Everything is programmatic:** a persistent Python REPL is the built-in model tool; file operations, shell commands, tool use, subagents, and context management happen through code.
+- **Subagents are built in:** `rlm.spawn(...)` spawns real child agents for parallel or background work and returns their results programmatically.
+- **The harness can improve:** `/refine` reviews the current trajectory and can apply small, evidence-backed updates to supplemental harness state. It never rewrites the immutable base system prompt, and recorded snapshots support rollback.
+- **Skills are executable:** skills are importable Python packages, and the built-in skill creator can turn recurring workflows into project or personal skills.
+- **Sessions run in the background:** daemon-backed agents keep running when the terminal disconnects and can be reattached later.
+- **Agents communicate directly:** running agents can exchange messages and orchestrate one another without routing everything through the user.
+- **Long tasks keep moving:** automatic compaction, persistent goals, heartbeats, schedules, autonomous mode, and retained subagents preserve progress across turns and terminal sessions.
 
-2. Refresh the pinned Rust source and validated catalog snapshot in
-   `VERSION.json`. Cargo dependencies come from the upstream `Cargo.lock`:
+## Clipboard over SSH and tmux
 
-   ```console
-   nix run .#update
-   ```
+Prime Agent uses the local clipboard tool (such as `pbcopy`) when available. In tmux it asks the attached tmux client to forward a clipboard buffer if that client advertises the `Ms` capability. This works with tmux's default `set-clipboard external`, unlike application-origin OSC 52. Without tmux, remote copies request delivery using OSC 52. Terminal requests cannot confirm that your local clipboard changed, so Prime Agent reports them as unconfirmed.
 
-3. Build and verify, then commit:
+Nested tmux servers and terminals may still block delivery. An outer tmux with `set-clipboard external` can reject the inner server's OSC 52. In that case, run `tmux set -s set-clipboard on` on the outer server, or use native terminal selection (Shift-drag in most terminals; Option-drag in iTerm2) followed by Cmd-C. macOS Terminal.app does not support OSC 52; iTerm2 requires its “Applications in terminal may access clipboard” setting.
 
-   ```console
-   nix flake check --print-build-logs
-   git commit -am "prime-agent: update to v$NEW_VERSION"
-   ```
+## Getting Started
 
-The `./update-prime-agent.sh` wrapper runs the update and checks, then commits
-and pushes by default. Use `./update-prime-agent.sh --no-commit` to review the
-changes without committing. If a build breaks, inspect `nix/packages/prime-agent.nix`
-and `nix/kernel/pyproject.toml` for packaging assumptions that need updating.
+Start Prime Agent from the repository or directory you want it to work in:
 
-Use `nix run .#update -- --force` to regenerate hashes for the current tag.
-
-## Trust model
-
-Each revision pins the Prime Agent source and bundled catalog snapshot by
-content hash. Rust dependencies use the checksums in upstream `Cargo.lock`, and
-the Nix-built Python kernel dependencies are pinned in `nix/kernel/uv.lock`.
-Updates are built and checked before commit.
-
-This repository packages Prime Agent but does not maintain it. Prime Agent is
-MIT licensed by Prime Intellect and its contributors. See
-[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for packaging attribution.
-
-## Development
-
-```console
-nix fmt
-nix flake check --print-build-logs
+```bash
+cd /path/to/project
+prime-agent
 ```
 
-Direnv loads the dev shell automatically (`.envrc`). On Darwin, Nix skips two
-upstream CLI tests with socket or short-timer assumptions; it runs the rest
-with `NO_COLOR=1`. Linux package builds run the full CLI library suite.
-`checks.kernel` validates the packaged CLI and Python runtime on Darwin.
+On first launch, run `/login` to choose a subscription or API-key provider. Prime Agent works in the current directory and can run commands and modify files there. Use a disposable clone, clean worktree, or another checkpoint you can inspect and restore.
+
+> [!WARNING]
+> Prime Agent executes model-generated Python and project commands with your user permissions. Its worker and kernel processes improve lifecycle isolation and recovery; they are **not** a security sandbox. Review changes and use trusted repositories, instructions, and skills only. Run untrusted code or instructions in an external sandbox or restricted environment.
+
+Useful commands:
+
+```bash
+prime-agent agents                   # Browse running, idle, and saved sessions
+prime-agent attach <agent>           # Reattach to a running session
+prime-agent --resume [path|id]       # Browse sessions or resume one directly
+prime-agent status                   # Inspect background service state
+prime-agent doctor [--fix]           # Inspect or repair background services
+prime-agent update [--force]         # Update Prime Agent
+prime-agent shutdown [--force]       # Stop every agent, worker, and background service
+```
+
+The experimental Decision API (the `decisionApi.systemOneModel` setting)
+drives a decision model for real-time control tasks. See
+[Decision API setup and smoke checks](docs/decision-api.md) for the setting
+and verification in the persistent Python REPL.
+
+## Built for Long-Running Work
+Prime Agent is built for long-running work, especially for evaluations in research. These features are available in the TUI, and when run autonomously.
+
+- **Continual Harness:** `/refine` can persist focused, reviewable lessons as supplemental prompts, memories, reusable skill descriptions, or subagent specifications, with recorded refinement history. It does not replace packaging and reviewing new executable skills.
+- **Direct agent-to-agent communication:** running agents and retained subagents can discover one another, exchange messages, and steer active work.
+- **Daemon-backed continuity:** active sessions, Python REPL state, schedules, and subagents keep running when the terminal detaches and can be reattached later.
+- **Heartbeats and schedules:** `/heartbeat`, `rlm_heartbeat`, and `prime-agent schedule` can re-enter a session periodically or at a specific time.
+- **Persistent goals:** `/goal` keeps an objective and its progress active across turns until it is completed, paused, or cleared.
+- **Bounded autonomous mode:** `/autonomous` continues within configured turn, token, and time budgets and can run user-defined quality gates. A passed gate checks only what that gate verifies; reaching a limit does not imply task success.
+
+## Contributing
+
+Start with a GitHub Discussion for [general questions](https://github.com/PrimeIntellect-ai/prime-agent/discussions/categories/general), [bug reports](https://github.com/PrimeIntellect-ai/prime-agent/discussions/categories/bug-reports), and [feature requests](https://github.com/PrimeIntellect-ai/prime-agent/discussions/categories/feature-requests). Maintainers promote accepted work into Issues, and pull requests are reviewed from maintainers and vouched contributors.
 
 ## License
 
-The packaging code uses the MIT License. See [`LICENSE`](LICENSE).
+Prime Agent is fully open source and released under the [MIT License](LICENSE).
+
+## Citation
+
+If you use this codebase in your research, please cite Prime Agent:
+
+```bibtex
+@article{karten2026prime,
+  title={Prime Agent: A Self-Improving RLM Harness},
+  author={Karten, Seth and Zhang, Alex L. and Thomas, Kevin and Müller, Sebastian and Bakouch, Elie and Auras, Daniel and Senghaas, Mika and Obeid, Fares and Dunas, Konstantin and Hagemann, Johannes and Jaghouar, Sami},
+  journal={arXiv preprint arXiv:2608.23552},
+  year={2026}
+}
+```
+
+Available at [https://arxiv.org/abs/2608.23552](https://arxiv.org/abs/2608.23552).
