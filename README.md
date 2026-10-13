@@ -7,7 +7,7 @@ A small Nix flake that packages upstream [Prime Agent](https://github.com/PrimeI
 Run this from the repository root:
 
 ```sh
-./update-prime-agent.sh
+./update.sh
 ```
 
 The script checks the latest stable upstream tag. If it is unchanged, it exits without building. If it changed, it updates the pinned source and catalog hashes, runs `nix flake check --print-build-logs`, then commits the validated pin and pushes it. A failed update or validation does not leave a new version pin behind.
