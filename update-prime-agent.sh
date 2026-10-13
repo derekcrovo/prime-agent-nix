@@ -1,61 +1,42 @@
 #!/usr/bin/env bash
-# Update the packaged Prime Agent to the latest upstream stable tag.
-#
-# Wraps the repository's own update machinery (scripts/update.sh) with the
-# build verification and commit steps from README "Update to a new release".
-#
-# Usage:
-#   ./update-prime-agent.sh            # update to latest tag, verify, commit
-#   ./update-prime-agent.sh --check    # only report available update
-#   ./update-prime-agent.sh --force    # regenerate hashes for current tag
-#   ./update-prime-agent.sh --no-commit # update and verify, but don't commit
+# Pin the newest Prime Agent release, then build and validate it if it changed.
 set -euo pipefail
 
 cd "$(dirname "$0")"
 
-args=()
-commit=1
-force=0
-for arg in "$@"; do
-  case "$arg" in
-    --check) args+=("$arg") ;;
-    --force) args+=("$arg"); force=1 ;;
-    --no-commit) commit=0 ;;
-    *)
-      echo "Usage: $0 [--check|--force|--no-commit]" >&2
-      exit 2
-      ;;
-  esac
-done
-
-before_update="$(git hash-object VERSION.json)"
-
-# 1. Update VERSION.json pins (no-op when current, unless --force).
-nix run .#update -- "${args[@]+${args[@]}}"
-
-if [ "${1-}" = "--check" ]; then
-  exit 0
+if [ -n "$(git status --porcelain)" ]; then
+  echo "Working tree is not clean; commit or discard local changes before updating." >&2
+  exit 1
 fi
 
-after_update="$(git hash-object VERSION.json)"
-if [ "$force" -eq 0 ] && [ "$before_update" = "$after_update" ]; then
-  echo "No Prime Agent update; skipping build and verification."
-  exit 0
-fi
-
-# 2. Build and verify before committing.
-nix flake check --print-build-logs
-
-# 3. Commit the release bump.
-if [ "$commit" -eq 1 ] && ! git diff --quiet; then
-  rev="$(jq -r .rev VERSION.json)"
-  git add VERSION.json
-  if git ls-files --error-unmatch package-lock.json >/dev/null 2>&1; then
-    git add -u -- package-lock.json
+backup="$(mktemp)"
+cp VERSION.json "$backup"
+validated=0
+finish() {
+  status=$?
+  trap - EXIT
+  if [ "$status" -ne 0 ] && [ "$validated" -eq 0 ] && ! cmp -s "$backup" VERSION.json; then
+    cp "$backup" VERSION.json
+    echo "Update validation failed; restored the previous VERSION.json pin." >&2
   fi
-  git commit -m "prime-agent: update to $rev"
-  git push
-  echo "Committed update to $rev and pushed."
-else
-  echo "Nothing to commit."
+  rm -f "$backup"
+  exit "$status"
+}
+trap finish EXIT
+
+old_rev="$(jq -r .rev VERSION.json)"
+nix run .#update
+new_rev="$(jq -r .rev VERSION.json)"
+
+if [ "$old_rev" = "$new_rev" ]; then
+  echo "No Prime Agent update; skipping build and validation."
+  exit 0
 fi
+
+echo "Validating Prime Agent $new_rev (was $old_rev)."
+nix flake check --print-build-logs
+validated=1
+
+git commit --only -m "prime-agent: update to $new_rev" -- VERSION.json
+git push
+echo "Prime Agent $new_rev built, validated, committed, and pushed."

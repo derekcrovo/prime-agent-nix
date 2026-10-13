@@ -45,9 +45,11 @@
           pkgs = nixpkgs.legacyPackages.${system};
           release = builtins.fromJSON (builtins.readFile ./VERSION.json);
           version = pkgs.lib.removePrefix "v" release.rev;
-          # src is this repo itself: upstream source is merged into main, so
-          # fixes land here directly instead of via a pinned upstream rev.
-          src = self;
+          src = pkgs.fetchFromGitHub {
+            owner = "PrimeIntellect-ai";
+            repo = "prime-agent";
+            inherit (release) rev hash;
+          };
           catalogSrc = pkgs.fetchFromGitHub {
             owner = "PrimeIntellect-ai";
             repo = "prime-agent-catalog";
@@ -115,33 +117,6 @@
                 test "$(prime-agent --version 2>&1)" = ${pkgs.lib.escapeShellArg version}
                 touch "$out"
               '';
-        }
-      );
-
-      formatter = forAllSystems (
-        system:
-        let
-          pkgs = nixpkgs.legacyPackages.${system};
-        in
-        pkgs.writeShellApplication {
-          name = "fmt";
-          runtimeInputs = [ pkgs.nixfmt-tree ];
-          text = ''
-            if [ $# -eq 0 ]; then
-              set -- .
-            fi
-            exec treefmt "$@"
-          '';
-        }
-      );
-
-      devShells = forAllSystems (
-        system:
-        let
-          pkgs = nixpkgs.legacyPackages.${system};
-        in
-        {
-          default = pkgs.mkShell { packages = [ pkgs.nixfmt-tree ]; };
         }
       );
 
