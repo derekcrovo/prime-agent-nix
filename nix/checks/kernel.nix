@@ -41,5 +41,25 @@ pkgs.runCommand "prime-agent-kernel-${version}" { } ''
       importlib.import_module(path.name)
   PY
 
+  # Regression: inherited /nix/store PYTHONPATH entries must be scrubbed
+  # (a leaked dev-shell PYTHONPATH carries site-packages built for a
+  # different Python minor and shadows this env's own packages with
+  # ABI-incompatible builds), while non-store entries are preserved.
+  keep="$TMPDIR/pa-kernel-keep"
+  mkdir -p "$keep"
+  touch "$keep/pa_kernel_scrub_keep.py"
+  PYTHONPATH="/nix/store/zzz-pa-kernel-scrub-must-vanish:$keep" \
+    ${primeAgent}/bin/prime-agent-kernel-python - "$keep" <<'PY'
+  import importlib
+  import sys
+
+  keep = sys.argv[1]
+  assert keep in sys.path, f"non-store PYTHONPATH entry dropped: {sys.path}"
+  assert (
+      "/nix/store/zzz-pa-kernel-scrub-must-vanish" not in sys.path
+  ), f"store PYTHONPATH entry not scrubbed: {sys.path}"
+  importlib.import_module("pa_kernel_scrub_keep")
+  PY
+
   touch "$out"
 ''

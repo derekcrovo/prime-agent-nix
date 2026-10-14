@@ -91,9 +91,23 @@ rustPlatform.buildRustPackage {
       done
     done
 
-    makeWrapper ${kernelPython}/bin/python "$out/bin/prime-agent-kernel-python" \
-      --prefix PYTHONPATH : "$pythonModules" \
-      --set PYTHONDONTWRITEBYTECODE 1
+    # Kernel interpreter. Hand-rolled wrapper (makeWrapper cannot express
+    # this) because the scrub is load-bearing: a leaked dev-shell PYTHONPATH
+    # carries /nix/store site-packages built for a different Python minor,
+    # and PYTHONPATH precedes site-packages in sys.path, so e.g.
+    # python3.13-pydantic shadows this (3.11) env's own pydantic with an
+    # ABI-incompatible build and kernel start fails with "missing default
+    # Python packages (pydantic)". Drop inherited store entries; keep
+    # non-store ones (e.g. the skills dir launch wrappers export for
+    # late-installed skills).
+    cat >"$out/bin/prime-agent-kernel-python" <<'PA_KERNEL_PYTHON'
+    #!${stdenv.shell} -e
+    export PYTHONDONTWRITEBYTECODE=1
+    scrubbed="$(printf '%s' "''${PYTHONPATH:-}" | tr ':' '\n' | grep -v '^/nix/store/' | paste -sd: -)"
+    export PYTHONPATH="${placeholder "out"}/lib/prime-agent/python-modules''${scrubbed:+:$scrubbed}"
+    exec "${kernelPython}/bin/python" "$@"
+    PA_KERNEL_PYTHON
+    chmod +x "$out/bin/prime-agent-kernel-python"
 
     makeWrapper "$out/libexec/prime-agent" "$out/bin/prime-agent" \
       --set PI_PACKAGE_DIR "$packageDir" \
