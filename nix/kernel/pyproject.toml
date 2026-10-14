@@ -10,6 +10,7 @@ dependencies = [
   "httpx",
   "PyYAML",
   "tomli",
+  "toml",
   "python-dotenv",
   "pandas",
   "numpy",
@@ -18,6 +19,8 @@ dependencies = [
   "lxml",
   "pydantic",
   "Pillow>=10.0.0",
+  "ipython",
+  "ipykernel",
 ]
 
 [tool.uv]
